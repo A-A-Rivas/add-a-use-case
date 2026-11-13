@@ -46,6 +46,7 @@
             circle
             plain
             type="primary"
+            data-cy="student-edit"
             @click.stop="showEditStudentDialog(row)"
           ></el-button>
         </template>

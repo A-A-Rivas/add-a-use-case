@@ -6,6 +6,7 @@
     label-width="110px"
     style="padding-right: 30px"
     label-position="left"
+    :disabled="deactivating || !loaded"
   >
     <el-form-item label="Id:">
       <el-input v-model="studentBeingEdited.id" disabled></el-input>
@@ -15,12 +16,14 @@
     </el-form-item>
     <el-form-item label="Status:" prop="enabled">
       <el-switch
+        v-if="!persistedEnabled"
         v-model="studentBeingEdited.enabled"
         inline-prompt
         active-text="Enabled"
         inactive-text="Disabled"
         style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
       />
+      <el-tag v-else type="success" data-cy="student-active-status">Enabled</el-tag>
     </el-form-item>
     <el-form-item label="First Name:" prop="firstName">
       <el-input v-model="studentBeingEdited.firstName"></el-input>
@@ -35,6 +38,14 @@
       <el-input v-model="studentBeingEdited.teamName" disabled></el-input>
     </el-form-item>
     <div style="display: flex; justify-content: end">
+      <el-button
+        v-if="persistedEnabled"
+        type="danger"
+        data-cy="student-deactivate"
+        :loading="deactivating"
+        @click="confirmDeactivation"
+        >Deactivate</el-button
+      >
       <el-button @click="$emit('close-dialog')"> Cancel </el-button>
       <el-button type="primary" @click="updateExistingStudent()"> Confirm </el-button>
     </div>
@@ -42,14 +53,18 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Student } from '@/apis/student/types'
 import type { FormInstance } from 'element-plus'
-import { findStudentById, updateStudent } from '@/apis/student'
+import { deactivateStudent, findStudentById, updateStudent } from '@/apis/student'
 import { ref, onMounted } from 'vue'
 
 const { studentId } = defineProps(['studentId'])
 const emit = defineEmits(['close-dialog'])
+const persistedEnabled = ref(false)
+const persistedName = ref('')
+const loaded = ref(false)
+const deactivating = ref(false)
 
 // Note that the structure of the userData is NOT the same as the User interface since the roles are stored as an array
 const studentBeingEdited = ref<Student>({
@@ -98,6 +113,9 @@ async function loadStudent(studentId: number) {
   studentBeingEdited.value.lastName = result.data.lastName
   studentBeingEdited.value.email = result.data.email
   studentBeingEdited.value.teamName = result.data.teamName
+  persistedEnabled.value = result.data.enabled === true
+  persistedName.value = `${result.data.firstName} ${result.data.lastName}`
+  loaded.value = true
 }
 
 onMounted(() => {
@@ -105,6 +123,7 @@ onMounted(() => {
 })
 
 async function updateExistingStudent() {
+  if (deactivating.value || !loaded.value) return
   await studentForm.value!.validate() // Validate the form
 
   const updatedStudent: Student = {
@@ -121,6 +140,40 @@ async function updateExistingStudent() {
 
   ElMessage.success('Student updated successfully')
   emit('close-dialog')
+}
+
+async function confirmDeactivation() {
+  if (deactivating.value || !loaded.value) return
+  deactivating.value = true
+  try {
+    try {
+      await ElMessageBox.confirm(
+        `Deactivate ${persistedName.value}? Access, submissions, and reminders will stop. ` +
+          'Course section and team membership and previously submitted work will remain. ' +
+          'Teammates will no longer be able to submit new evaluations of this student.',
+        'Deactivate student',
+        {
+          type: 'warning',
+          confirmButtonText: 'Confirm',
+          cancelButtonText: 'Cancel',
+          customClass: 'student-deactivation-warning',
+          distinguishCancelAndClose: true
+        }
+      )
+    } catch {
+      return // Cancel, Escape, backdrop, and close are local; no request or profile save.
+    }
+    const result = await deactivateStudent(studentId)
+    if (!result.flag) return
+    studentBeingEdited.value.enabled = result.data.enabled
+    persistedEnabled.value = result.data.enabled === true
+    ElMessage.success(`${persistedName.value} has been deactivated`)
+    emit('close-dialog') // The parent refreshes the persisted status after success.
+  } catch {
+    // The shared request interceptor reports errors. Retain status for reload/retry.
+  } finally {
+    deactivating.value = false
+  }
 }
 </script>
 
