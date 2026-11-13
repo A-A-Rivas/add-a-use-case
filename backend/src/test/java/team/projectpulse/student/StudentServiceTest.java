@@ -90,6 +90,7 @@ class StudentServiceTest {
 
     @Test
     void testFindStudentById() {
+        given(this.userUtils.getUserId()).willReturn(1);
         // Given
         Student john = this.students.get(0);
         given(this.studentRepository.findById(1)).willReturn(Optional.of(john));

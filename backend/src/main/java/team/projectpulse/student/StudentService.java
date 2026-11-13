@@ -70,7 +70,10 @@ public class StudentService {
     }
 
     public Student findStudentById(Integer studentId) {
-        return this.studentRepository.findById(studentId)
+        Integer callerId = this.userUtils.getUserId();
+        // Self-service is bound to caller identity; instructor/owner reads use the same scoped predicate as deactivation.
+        return (studentId.equals(callerId) ? this.studentRepository.findById(studentId)
+                : this.studentRepository.findDeactivationTarget(studentId, callerId))
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
     }
 

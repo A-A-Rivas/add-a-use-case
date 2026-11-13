@@ -337,7 +337,9 @@ class EvaluationServiceTest {
         given(this.sectionRepository.findById(2)).willReturn(Optional.of(this.john.getSection()));
         given(this.studentRepository.findBySectionSectionId(2)).willReturn(this.students);
         given(this.evaluationRepository.findRecordedEvaluateeIds(2, "2023-W31")).willReturn(List.of(3));
-        given(this.evaluationRepository.findByWeekAndEvaluateeId("2023-W31", 3)).willReturn(this.johnsEvaluations);
+        given(this.evaluationRepository.findByWeekAndEvaluateeId(anyString(), anyInt()))
+                .willAnswer(call -> "2023-W31".equals(call.getArgument(0)) && Integer.valueOf(3).equals(call.getArgument(1))
+                        ? this.johnsEvaluations : List.of());
         WeeklyPeerEvaluationReport report = this.evaluationService.generateWeeklyPeerEvaluationReportForSection(2, "2023-W31");
         assertThat(report.getPeerEvaluationAverages()).extracting(PeerEvaluationAverage::getStudentId)
                 .containsExactly(3, 5, 6, 7);

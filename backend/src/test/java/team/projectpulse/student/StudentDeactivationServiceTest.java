@@ -93,6 +93,23 @@ class StudentDeactivationServiceTest {
     }
 
     @Test
+    void instructorDetailsReadUsesScopedFinder() {
+        Student student = new Student();
+        when(userUtils.getUserId()).thenReturn(1);
+        when(studentRepository.findDeactivationTarget(3, 1)).thenReturn(Optional.of(student));
+        assertThat(service.findStudentById(3)).isSameAs(student);
+        verify(studentRepository, never()).findById(any());
+    }
+
+    @Test
+    void detailsReadRefusesTargetOutsideCallerScope() {
+        when(userUtils.getUserId()).thenReturn(1);
+        when(studentRepository.findDeactivationTarget(3, 1)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.findStudentById(3)).isInstanceOf(ObjectNotFoundException.class);
+        verify(studentRepository, never()).findById(any());
+    }
+
+    @Test
     void persistenceFailurePropagatesWithoutSuccessfulResult() {
         Student student = new Student();
         student.setEnabled(true);
