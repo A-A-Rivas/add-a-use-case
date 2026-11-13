@@ -9,8 +9,6 @@ import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -72,7 +70,10 @@ public class StudentService {
     }
 
     public Student findStudentById(Integer studentId) {
-        return this.studentRepository.findById(studentId)
+        Integer callerId = this.userUtils.getUserId();
+        // Self-service is bound to caller identity; instructor/owner reads use the same scoped predicate as deactivation.
+        return (studentId.equals(callerId) ? this.studentRepository.findById(studentId)
+                : this.studentRepository.findDeactivationTarget(studentId, callerId))
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
     }
 
@@ -104,9 +105,23 @@ public class StudentService {
         return savedStudent;
     }
 
+    public Student deactivateStudent(Integer studentId) {
+        Student student = this.studentRepository.findDeactivationTarget(studentId, this.userUtils.getUserId())
+                .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
+        if (!student.isEnabled()) {
+            return student;
+        }
+        student.setEnabled(false);
+        return this.studentRepository.save(student);
+    }
+
     public Student updateStudent(Integer studentId, Student update) {
         Student oldStudent = this.studentRepository.findById(studentId)
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
+
+        if (oldStudent.isEnabled() && !update.isEnabled()) {
+            throw new IllegalArgumentException("Use the dedicated Deactivate action to deactivate a student.");
+        }
 
         // If the user is not an admin, then the user can only update her username, first rubricName, last rubricName, and email
         oldStudent.setUsername(update.getUsername());
@@ -114,10 +129,8 @@ public class StudentService {
         oldStudent.setLastName(update.getLastName());
         oldStudent.setEmail(update.getEmail());
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
         // If the user is an admin, then the user can update all the fields
-        if (authentication.getAuthorities().stream().anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_instructor"))) {
+        if (this.userUtils.hasRole("ROLE_instructor")) {
             oldStudent.setEnabled(update.isEnabled());
 //            oldStudent.setRoles(update.getRoles());
         }

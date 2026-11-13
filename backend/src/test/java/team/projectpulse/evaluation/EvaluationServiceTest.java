@@ -315,6 +315,44 @@ class EvaluationServiceTest {
         verify(this.evaluationRepository, times(1)).save(newPeerEvaluation);
     }
 
+    /** UC-STU-deactivate-student T8 / E6: a stale page cannot create a new evaluation. */
+    @Test
+    void testNewEvaluationOfInactiveStudentIsRejected() {
+        Clock fixed = Clock.fixed(Instant.parse("2023-08-08T12:00:00Z"), ZoneOffset.UTC);
+        given(this.clock.instant()).willReturn(fixed.instant());
+        given(this.clock.getZone()).willReturn(fixed.getZone());
+        this.eric.setEnabled(false);
+        PeerEvaluation evaluation = new PeerEvaluation("2023-W31", this.john, this.eric, List.of(), "public", "private");
+        assertThatThrownBy(() -> this.evaluationService.addPeerEvaluation(evaluation))
+                .isInstanceOf(PeerEvaluationIllegalArgumentException.class).hasMessageContaining("inactive student");
+        org.mockito.Mockito.verify(this.evaluationRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /** UC-STU-deactivate-student T10 / E7: history survives even after independent team removal. */
+    @Test
+    void testWeeklyReportSelectsDisabledHistoryOnlyForRequestedWeek() {
+        this.john.setEnabled(false);
+        this.john.setTeam(null);
+        this.eric.setEnabled(false);
+        given(this.sectionRepository.findById(2)).willReturn(Optional.of(this.john.getSection()));
+        given(this.studentRepository.findBySectionSectionId(2)).willReturn(this.students);
+        given(this.evaluationRepository.findRecordedEvaluateeIds(2, "2023-W31")).willReturn(List.of(3));
+        given(this.evaluationRepository.findByWeekAndEvaluateeId(anyString(), anyInt()))
+                .willAnswer(call -> "2023-W31".equals(call.getArgument(0)) && Integer.valueOf(3).equals(call.getArgument(1))
+                        ? this.johnsEvaluations : List.of());
+        WeeklyPeerEvaluationReport report = this.evaluationService.generateWeeklyPeerEvaluationReportForSection(2, "2023-W31");
+        assertThat(report.getPeerEvaluationAverages()).extracting(PeerEvaluationAverage::getStudentId)
+                .containsExactly(3, 5, 6, 7);
+        PeerEvaluationAverage history = report.getPeerEvaluationAverages().getFirst();
+        assertThat(history.getTeamName()).isNull();
+        assertThat(history.getAverageTotalScore()).isCloseTo(51.33, within(0.01));
+        assertThat(history.getPublicComments()).containsExactlyElementsOf(
+                this.johnsEvaluations.stream().map(PeerEvaluation::getPublicComment).toList());
+        given(this.evaluationRepository.findRecordedEvaluateeIds(2, "2023-W32")).willReturn(List.of());
+        assertThat(this.evaluationService.generateWeeklyPeerEvaluationReportForSection(2, "2023-W32").getPeerEvaluationAverages())
+                .extracting(PeerEvaluationAverage::getStudentId).containsExactly(5, 6, 7);
+    }
+
     @Test
     void testAddPeerEvaluationNotInActiveWeeks() {
         // Given
@@ -443,6 +481,13 @@ class EvaluationServiceTest {
         verify(this.evaluationRepository, times(1)).save(oldPeerEvaluation);
     }
 
+    /** UC-STU-deactivate-student T9 / E6: deactivation does not freeze an existing evaluation. */
+    @Test
+    void testExistingEvaluationOfInactiveStudentRemainsEditableWithinWindow() {
+        this.eric.setEnabled(false);
+        testUpdatePeerEvaluation();
+    }
+
     @Test
     void testUpdatePeerEvaluationAfterTheSubmissionWindowClosed() {
         // Given
@@ -469,6 +514,12 @@ class EvaluationServiceTest {
                 .hasMessage("The submission window for this peer evaluation has closed, so it can no longer be changed.");
         assertThat(oldPeerEvaluation.getPublicComment()).isEqualTo("public comment"); // The stored evaluation is untouched
         verify(this.evaluationRepository, times(0)).save(any(PeerEvaluation.class));
+    }
+
+    @Test
+    void testExistingEvaluationOfInactiveStudentIsReadOnlyAfterWindowCloses() {
+        this.eric.setEnabled(false);
+        testUpdatePeerEvaluationAfterTheSubmissionWindowClosed();
     }
 
     @Test

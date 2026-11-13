@@ -11,6 +11,12 @@ import java.util.Optional;
 @Repository
 public interface PeerEvaluationRepository extends JpaRepository<PeerEvaluation, Integer> {
 
+    @Query("""
+            select distinct e.evaluatee.id from PeerEvaluation e
+            where e.evaluatee.section.sectionId = :sectionId and e.week = :week
+            """)
+    List<Integer> findRecordedEvaluateeIds(@Param("sectionId") Integer sectionId, @Param("week") String week);
+
     List<PeerEvaluation> findByWeekAndEvaluateeId(String week, Integer studentId);
 
     Optional<PeerEvaluation> findByWeekAndEvaluatorIdAndEvaluateeId(String week, Integer evaluatorId, Integer evaluateeId);

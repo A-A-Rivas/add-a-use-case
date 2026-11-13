@@ -31,6 +31,14 @@ public class StudentSecurityService {
         return studentId.equals(studentIdFromJwt);
     }
 
+    public boolean canDeactivateStudent(Integer studentId) {
+        if (studentId == null || this.userUtils.getUserId() == null
+                || !(this.userUtils.hasRole("ROLE_instructor") || this.userUtils.hasRole("ROLE_admin"))) {
+            return false;
+        }
+        return this.studentRepository.findDeactivationTarget(studentId, this.userUtils.getUserId()).isPresent();
+    }
+
     /**
      * Check if the user is the instructor of the section that the student is in
      *
