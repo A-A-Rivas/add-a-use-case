@@ -1,0 +1,33 @@
+{
+  "branch": "design/deactivate-student",
+  "base": "main",
+  "repository": "https://github.com/A-A-Rivas/add-a-use-case",
+  "commits": [
+    {
+      "commit": "edfdc71",
+      "title": "spec(stu): retain membership and work across deactivation"
+    },
+    {
+      "commit": "b386399",
+      "title": "spec(eva): reject new evaluations of deactivated students"
+    },
+    {
+      "commit": "cacac10",
+      "title": "spec(eva): retain only recorded weekly history for disabled students"
+    },
+    {
+      "commit": "31dc51a",
+      "title": "spec(stu): define confirmation, retries, access denial, and failure extensions"
+    },
+    {
+      "commit": "7e1fdaf",
+      "title": "design(stu): record approved deactivation design and coverage plan"
+    }
+  ],
+  "bundle": "deactivate-student-design.bundle",
+  "push": {
+    "succeeded": false,
+    "output": "fatal: unable to access 'https://github.com/A-A-Rivas/add-a-use-case.git/': Could not resolve host: github.com"
+  },
+  "production_code_changed": false
+}
